@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 require 'yaml'
 require "json"
 
@@ -71,11 +73,19 @@ class ConfigData
         if add_val.instance_of?(Array) or add_val.instance_of?(Hash)
           @current[rname] = RawData.new(add_val)
         else
-          @current[rname] = add_val
+          if @current.instance_of?(Array) or @current.instance_of?(Hash)
+            @current[rname] = add_val
+          else
+            @current = add_val
+          end
         end
       end
-      return nil if @current.nil? or !@current.has_key?(rname)
-      return @current[rname]
+      return nil if @current.nil?
+      if @current.instance_of?(Array) or @current.instance_of?(Hash)
+        return @current[rname]
+      else
+        return @current
+      end
     end
   end
   def clear()
@@ -87,18 +97,60 @@ class ConfigData
   def dumpYAML()
     return YAML.dump(@value.to_o())
   end
+  def saveYAML(file)
+    saveToFile(file,dumpYAML())
+  end
   def loadYAML(str)
+    if str == ""
+      clear()
+      return
+    end
     raw = YAML.load(str)
     @value = RawData.new(raw)
+  end
+  def readYAML(file)
+    loadYAML(loadFromFile(file))
   end
   def dumpJson()
     return JSON.generate(@value.to_o())
   end
+  def saveJson(file)
+    saveToFile(file,dumpJson())
+  end
   def loadJson(str)
+    if str == ""
+      clear()
+      return
+    end
     raw = JSON.parse(str)
     @value = RawData.new(raw)
   end
+  def readJson(file)
+    loadJson(loadFromFile(file))
+  end
   def method_missing(name, *args)
     return @value.send(name,args)
+  end
+  private
+  def saveToFile(fname,data)
+    File.open(fname,File::Constants::RDWR|File::Constants::CREAT){|f|
+      f.flock(File::Constants::LOCK_EX)
+      begin
+        f.write(data)
+      ensure
+        f.flock(File::Constants::LOCK_UN)
+      end
+    }
+  end
+  def loadFromFile(fname)
+    File.open(fname,File::Constants::RDONLY){|f|
+      f.flock(File::Constants::LOCK_SH)
+      begin
+        return f.read()
+      ensure
+        f.flock(File::Constants::LOCK_UN)
+      end
+    }
+    return nil
   end
 end
